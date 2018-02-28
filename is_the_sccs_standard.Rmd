@@ -1,0 +1,352 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+---
+# Is the Standard Cross-Cultural Sample really standard?
+
+## Galton's problem
+
+Similarity between cultures can be due to shared ancestry, borrowing, and the co-evolution of traits. It is difficult to infer on the latter without taking ancestry and borrowing into account. (Here is an elegant [summary](www.jstor.org/stable/pdf/3449291.pdf).)
+
+If we observe a correlation between two traits in a cross-cultural database, is this due to autocorrelation in the data or a meaningful process that results in co-evolution? People tend to get around this in two ways:
+
+1. We can control for Galton's problem in various ways (such as grouping societies across languages and regions)
+2. We can use a representative sample to test our hypotheses.
+
+## Cousin marriage and descent in the Ethnographic Atlas
+
+```{r echo = F, message = F, warning = F}
+knitr::opts_chunk$set(fig.width=5, fig.height=5, fig.path='Figs/', eval=TRUE, echo=FALSE, warning = FALSE, message=FALSE, tidy=TRUE)
+
+library(dplyr) # <3
+library(stringr) # for strings
+library(ggplot2) # for plots
+library(reshape2) # for data wrangling
+library(knitr) # for knitting
+library(itsadug) # for gams
+
+# ea = read.csv('cousin_paper/rehash/ea_tidy.csv') # ea in long format
+```
+
+Here is a specific example: In Veiled Sentiments (1986), Lila Abu-Lughod looks at a patrilineal Bedouin group. She argues that marrying your male first cousin is beneficial for women in this group, because it keeps them in the patriline -- they stay with their own family after marriage. 
+
+Is this a cross-cultural phenomenon? We could test this using the Ethnographic Atlas (EA, via the D-Place database), which has data on main line of descent and prevalence of cousin marrige. 
+
+The EA contains 1290 societies across 138 language families and 50 geographic-cultural regions. Cultural behaviour is coded across 94 different variables.
+
+Let's do something simple and ask this question: if a society has patrilineal descent, does it allow marriage to first cousins? If there is a correlation, it indicates that Abu-Lughod observed a universal(ish) pattern.
+
+```{r }
+cousin = ea %>% #from the D-Place/Ethnographic atlas
+  filter(title == 'Cousin marriages permitted', !is.na(code)) %>%  # look up cousin marriage
+    mutate(marry_first_cousin = ifelse(name == 'Any first cousins', T, F)) %>% # mark societies that allow first cousin marriage
+      select(society,family,region,marry_first_cousin,in_sccs)
+
+cousin = ea %>% 
+  filter(title == 'Descent: major type', !is.na(code)) %>%  # now look up descent
+    mutate(patrilineal = ifelse(name == 'Patrilineal', T, F)) %>%  # mark societies with patrilineal descent
+      select(society,family,region,patrilineal) %>% 
+        merge(cousin) # merge the two sets
+```
+
+The EA codes descent and cousin marriage as two separate variables (EA043 and EA023). We have 1036 / 1291 societies with data for both. 
+
+We can make a simple cross-tabulation:
+
+```{r }
+ctable = cousin %>% 
+  group_by(patrilineal,marry_first_cousin) %>% 
+    summarise(n = n()) %>% 
+      dcast(patrilineal ~ marry_first_cousin)
+
+ctable$patrilineal = recode(as.factor(ctable$patrilineal), 'TRUE' = 'patrilineal descent', 'FALSE' = 'other descent')
+names(ctable) = c('','first cousin marriage absent','first cousin marriage present')
+kable(ctable)
+```
+
+There are more instances of allowing first cousin marriage in patrilineal societies. Or so it looks.
+
+We fit a binomial regression model estimating whether first cousin marriage is allowed, using whether a society is patrilineal as a predictor. This is pretty simplistic, but works as an illustration. (Note that I'm fitting the regression using a Generalised Additive Model framework (Wood 2016).)
+
+
+```{r }
+fit1 = gam(marry_first_cousin ~ patrilineal, data = cousin, family = binomial (link = logit), method = "ML")
+
+fit1b = round(summary(fit1)$p.table[2,1],2)
+fit1se = round(summary(fit1)$p.table[2,2],2)
+```
+
+Fit 1 estimates that the effect of having patrilineal descent is strong on permission on first cousin marriage (b = `r fit1b`, se = `r fit1se`) Maybe this pattern is universal! What happens if we control for **language family** and **region**?
+
+```{r }
+fit2 = gam(marry_first_cousin ~ patrilineal + s(family, bs = 're') + s(region, bs = 're'), data = cousin, family = binomial (link = logit), method = "ML")
+
+fit2b = round(summary(fit2)$p.table[2,1],2)
+fit2se = round(summary(fit2)$p.table[2,2],2)
+
+```
+
+The effect disappears in Fit 2 (b = `r fit2b`, se = `r fit2se`). If we compare the models using the Akaike Information Criterion and a Chi-square test of the REML scores, we see that Fit 2 provides a much better fit (p $<$ 0.001).
+
+```{r eval=F}
+compareML(fit1,fit2)
+```
+
+I was a bit dishonest earlier; a GAM helpfully calculates the pseudo-r squared (r²) for us, which provides an estimate of how much variance is explained by the model. The r² of Fit 1 is, in fact, very low (`r summary(fit1)$r.sq %>% round(2)`). This means that this model explains very little variance in the sample, significant effect or not. In contrast, the r² of Fit 2 is `r summary(fit2)$r.sq %>% round(2)`, which is much higher.
+
+Another way of controlling for Galton's problem is to take a sample of human societies that is representative in some way -- that is sampled consistently across language families and cultural-geographical regions. The Standard Cross-Cultural Sample is an example of that.
+
+The SCCS has a different set of variables. But the societies in the SCCS are a proper subset of the societies in the EA. So we can still rely on the EA variables, but only look at societies that are in the SCCS. If the SCCS is a representative sample, this should extend to the EA variables as well.
+
+```{r }
+fit3 = gam(marry_first_cousin ~ patrilineal, data = cousin[cousin$in_sccs == T,], family = binomial (link = logit))
+
+fit3b = round(summary(fit3)$p.table[2,1],2)
+fit3se = round(summary(fit3)$p.table[2,2],2)
+
+```
+
+Fit 3 is the same as fit 1, except the sample is different. The effect of patrilineal descent on cousin marriage is absent here (b = `r fit3b`, se = `r fit3se`).
+
+What we see in Fit 3 is that, when testing on societies in the SCCS only, the effect is absent. Note that we didn't include random intercepts -- they may or may not improve on the model. The point is, the SCCS sample does not allow us to reject the null, indicating what we suspected all along: the EA is not a weighted sample.
+
+This does not preclude that there is a real cross-cultural correlation here. The coding I used is very simplistic and collapses a lot of information. The point is that the SCCS sample acts like the EA sample with random intercepts grouping societies under language family and cultural-geographic region.
+
+## Variation explained by language family and region in the EA
+
+Can we consistently assess the size of variance explained by family and region in the EA? Can we compare it to the SCCS?
+
+Most (almost all) variables in the EA are categorical: their levels cannot be ordered in a straightforward way ("patrilineal" is not more or less than "matrilineal" and so on). 
+
+What we could do is fit a multinomial model to estimate the distribution of the levels for each predictor, using Generalised Additive Modelling (Wood 2016). However, this takes a very-very long time and might not actually work, because there are too many levels and too little data. Remember, we have to find a solution that will work for the SCCS as well (195 societies versus 1290 in the EA) 
+
+Instead, we cheat, and fit a binomial model on the most frequent level of each variable. 
+
+For example, "patrilineal" is the most frequent level of the "descent" variable, with 589/1036 societies with data being patrilineal.
+
+We can estimate an intercept for "society is patrilineal" with a language family and a region random intercept (fit 4).
+
+
+```{r }
+fit4 = gam(patrilineal ~ 1 + s(family, bs = 're') + s(region, bs = 're'), data = cousin, family = binomial (link = logit), method = "ML")
+```
+
+The r² of Fit 4 is `r round(summary(fit4)$r.sq,2)`, indicating that language family and region explain a large amount variation in whether a society is patrilineal or not.
+
+```{r }
+fit5 = gam(patrilineal ~ 1 + s(family, bs = 're') + s(region, bs = 're'), data = cousin[cousin$in_sccs == T,], family = binomial (link = logit), method = "ML")
+```
+
+We can fit the same model on societies in the SCCS (fit 5). The r² of Fit 5, fit on the SCCS, is `r round(summary(fit5)$r.sq,2)`. It's lower -- family and region matter less in the SCCS. But they still matter, to a degree.
+
+This won't work this nicely for a lot of variables. Even where it does, it collapses a lot of information, as it treats all other levels of the variable as one thing. But we don't exactly aim at modelling accuracy here. The end game is to compare the EA to the SCCS, and we want methods that scale.
+
+### Setting up
+
+In order for this to work for all variables (or most of them, at least), we need to make a few adjustments. First, this will only really work for categorical predictors. Lucky us, most variables in the EA are categorical:
+
+```{r }
+ea %>% 
+  select(var_id,type) %>% 
+    unique %>% 
+      group_by(type) %>% 
+        summarise(number_of_variables = n()) %>% 
+          kable# number of variables per type
+```
+
+The problem is that a lot of these categories have a lot of levels and the ratio of observations across levels is not necessarily skewed: in many cases, each level has about the same amount of observations for it. This makes picking a "most populous level" especially awkward. 
+
+I show this for the first ten variables below. EAxxx is the variable name, and code is the numeric coding of the variable levels:
+
+```{r }
+vars = ea %>% 
+  filter(type == 'Categorical') %>% 
+    select(var_id) %>%
+      droplevels %>% 
+        pull %>% 
+          levels # vars vector: only grab categorical variables
+
+ea %>% 
+  filter(var_id %in% vars[1:10]) %>%
+    group_by(var_id,code) %>% 
+      summarise(n = n()) %>% 
+        ggplot(aes(x = code, y = n, colour = var_id)) +
+          geom_point() +
+            xlim(0,5) +
+              facet_wrap(~ var_id) +
+                theme(legend.position = 'none')
+
+```
+
+This is actually even more complicated, as not all variables are coded from 1 to n. But the point comes across.
+
+Another issue is non-informative levels. Missing data are coded as such in the EA, but a number of levels also clearly refer to lack of a pattern (if not lack of information), and trying to predict the absence of something is probably not very informative. The suspect levels for categorical variables are:
+
+- "^Absent/absence" (etc)
+- "Activity is absent"
+- "Activity present, sex diff. unspecified"
+- "None"
+- "None preferred"
+
+We should remove these.
+
+```{r }
+ea2 = ea %>% 
+        filter(var_id %in% vars) %>%
+          droplevels
+
+drop_these ='(^[Aa]bsen.*$|Activity is absent|Activity present, sex diff. unspecified|None|None preferred)'
+
+ea2$code = ifelse(str_detect(ea2$name, drop_these), NA, ea2$code)
+
+```
+
+Given the remaining data, for each variable, we pick the levels with the most observations.
+
+```{r }
+
+level_matcher = ea2 %>%
+                  filter(!is.na(code)) %>% 
+                    group_by(var_id,code) %>% 
+                      summarise(n = n()) %>% 
+                        arrange(-n,var_id) %>% 
+                          ungroup()# get obs counts per var level
+
+level_highest = level_matcher[!duplicated(level_matcher$var_id),] # get highest counts
+```
+
+I fretted earlier that a number of variables have the data distributed relatively evenly across levels. This is bad. We can guess that a binomial regression model that is trying to predict 19/1290 observations isn't going to do too well. Not to mention that, in the SCCS, there are only 195 societies. 
+
+So, we impose an arbitrary cutoff, and only include variables which have at least 300 observations for the largest level.
+
+```{r }
+level_highest = level_highest %>% filter(n > 299)
+
+ea2 = ea2 %>% filter(var_id %in% level_highest$var_id)
+
+vars = vars[vars %in% level_highest$var_id]
+```
+
+We are left with 55 / 84 variables. This captures 70,100 observations in the EA (/120,000), but you can't make an omelette without breaking some eggs.
+
+```{r }
+# Finally, we set up a dummy boolean for each variable's biggest level (like "patrilineal" above).
+highest_matcher = level_highest %>%
+                  mutate(var_id_code = paste(var_id,code, sep = '_')) %>% 
+                    select(var_id_code) %>% 
+                      pull
+                     # we set up a dummy variable
+
+ea2 = ea2 %>% # we set up the same dummy for the ea data and pair them up
+       mutate(var_id_code = paste(var_id,code, sep = '_')) %>% 
+         mutate(biggest_true = ifelse(var_id_code %in% highest_matcher, T, F))
+```
+
+### Running the model
+
+We fit a binomial model on each variable, estimating nothing but an intercept and random intercepts for language family and region. The outcome is whether the variable level is the biggest level (e.g. "is descent patrilineal?"). We end up with a vector of r²-s, one for each model, and, by proxy, for each of the remaining variables.
+
+```{r }
+fitOnLevel = function(ea2,vars,ii){
+  
+little_set = ea2 %>% # get relevant set (it's a long df)
+              filter(var_id == vars[ii])
+
+
+# fit model:
+fit = bam(biggest_true ~ 1 + s(family, bs = 're') + s(region, bs = 're'), data = little_set, family=binomial (link = logit), discrete = F, method = 'fREML') # freml better at estimating random effects
+
+# get the mean of the adjusted r squared values
+mean_rq = summary(fit)$r.sq
+return(mean_rq)
+}
+```
+
+
+```{r eval = F}
+mean_rqs = as.list(NULL)
+
+for (ii in 1:length(vars)) { # loop through vars, fit function, get mean rsq
+  mean_rqs[[ii]] = fitOnLevel(ea2,vars,ii)
+  print(ii)
+}
+
+mean_rqs2 = unlist(mean_rqs)
+mean_rqs_ea = mean_rqs2
+save(mean_rqs_ea, file = 'mean_rqs_ea.Rda')
+```
+
+```{r echo=F}
+load('mean_rqs_ea.Rda')
+```
+
+## Variation explained by language family and region in the SCCS
+
+The r²-s for the EA are not going to be super interesting in themselves. We know that a lot of cultural traits co-vary with language and location. What is more interesting is how the EA, an unweighted sample, compares with the SCCS, a smaller, but, in return, weighted sample of humans. We can essentially repeat the method of assessing co-variation on the societies in the SCCS.
+
+```{r }
+sccs2 = ea2 %>%
+          filter(in_sccs == T)
+```
+
+We do run the risk that the most populous level of a variable in the EA will not be the most populous in the SCCS subset, but doing the count again would make the results pretty hard to compare. In the end, we can probably assume that the major subcategory under each category is conceptually robust enough to scale down to the subset.
+
+```{r eval = F}
+
+mean_rqs_sccs = as.list(NULL)
+
+for (ii in 1:length(vars)) {
+  mean_rqs_sccs[[ii]] = fitOnLevel(sccs2,vars,ii)
+  print(ii)
+}
+
+mean_rqs_sccs = unlist(mean_rqs_sccs)
+save(mean_rqs_sccs, file = 'mean_rqs_sccs.Rda')
+
+````
+
+```{r echo=F}
+load('mean_rqs_sccs.Rda')
+```
+
+After all this, we have r² values which express, for each of the 55 surviving categorical variables, the amount of variance explained by a simple language family and region random intercept. We have pairs of values: one value from a model fit on all societies in the EA, and one from the same model fit on the SCCS. 
+
+Caveats abound. 
+
+1. We work with samples of both of these datasets, albeit very large ones.
+2. The way we coded the variables makes a lot of information invisible for the models.
+3. Really smart people would use more phylogenetic information than two simple grouping factors to assess the effects of cultural relatedness. (Obviously, German has more to do with Dutch than with Farsi, but this information is absent from our models, which group German, Dutch, and Farsi (etc) on the one hand and e.g. Kazakh and Turkmen (etc) on the other.) 
+4. r² might not be the best way to compare models, but it is less obviously sensitive to sample size, which is a major difference between these sets.
+5. We should probably also compare each model to a model with *no random effects* to see whether it provides a significantly better fit, but this is abstract enough as it is.
+
+Bearing that in mind, here is a plot of r²-s from the two types of models across the 55 categorical variables.
+
+```{r }
+var_matcher = ea2 %>%  # grab titles of vars from ea
+                select(var_id,title) %>% 
+                  unique
+
+r_squares = cbind(vars,mean_rqs_sccs,mean_rqs_ea) %>% # pull together the values from the runs
+              data.frame(stringsAsFactors = F) %>% 
+                mutate(var_id = vars, 
+                  sccs = as.numeric(mean_rqs_sccs), 
+                    ea = as.numeric(mean_rqs_ea)) %>% # tidy up
+                      select(var_id,sccs,ea) %>%
+                        merge(var_matcher) %>% # add titles
+                          arrange(-ea) %>% # sick hack: order "title" for r sq from ea!
+                            mutate(title = factor(title, title)) %>% 
+                              melt(id = c('var_id','title'), variable.name = 'dataset')# melt for nice 
+```
+
+```{r fig.width = 12, fig.height = 12}
+ggplot(r_squares, aes(y = value, x = title, fill = dataset)) +
+  geom_bar(data = filter(r_squares, dataset == "ea"), stat = "identity") + 
+    geom_bar(data = filter(r_squares, dataset == "sccs"), stat = "identity",aes(y = value *(-1))) +
+      coord_flip() + 
+        xlab('') +
+          ylab('variance explained by language family and region') + 
+            scale_y_continuous(breaks = seq(-1, 1, 0.1), labels = abs(seq(-1, 1, 0.1)))
+```
+
+Family and region explain **less** variance in the SCCS than in the EA, as expected. But their effect is not negligible. **This encourages discretion in the use of the SCCS, because human culture is more complicated than it seems.**

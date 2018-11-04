@@ -59,4 +59,11 @@ dat7 <- merge(societies,dat6)
 
 dat7 <- pullInEA()
 
+dat7 = mutate(ea, cousin_marriage =
+    ifelse(EA023 %in% c(7,8), 1,
+      ifelse(EA023 %in% c(11,12), 2,
+        ifelse(EA023 %in% c(1,2,3,4,5,6,9,13), 3,
+          ifelse(EA023 %in% c(10), 4,NA
+      )))))
+
 write.csv(dat7, file = 'ea_tidy.csv', row.names = F)

@@ -21,14 +21,15 @@ If we observe a correlation between two traits in a cross-cultural database, is 
 ```{r echo = F, message = F, warning = F}
 knitr::opts_chunk$set(fig.width=5, fig.height=5, fig.path='Figs/', eval=TRUE, echo=FALSE, warning = FALSE, message=FALSE, tidy=TRUE)
 
-library(dplyr) # <3
 library(stringr) # for strings
-library(ggplot2) # for plots
-library(reshape2) # for data wrangling
+library(tidyverse) # for data wrangling
 library(knitr) # for knitting
 library(itsadug) # for gams
+library(ggmap) # for maps
 try(setwd('~/Work/Bristol/dplace/sccs_blog_post/sccs_blog_post'))
+mapWorld <- map_data('world', wrap=c(-25,335), ylim=c(-55,75)) # pacific centered
 ea = read.csv('Data/ea_tidy.csv') # ea in long format
+ea$lon2 <- ifelse(ea$lon < -20, ea$lon + 360, ea$lon)
 ```
 
 Here is a specific example: In Veiled Sentiments (1986), Lila Abu-Lughod looks at a patrilineal Bedouin group. She argues that marrying your male first cousin is beneficial for women in this group, because it keeps them in the patriline -- they stay with their own family after marriage. 
@@ -43,13 +44,14 @@ Let's do something simple and ask this question: if a society has patrilineal de
 cousin = ea %>% #from the D-Place/Ethnographic atlas
   filter(title == 'Cousin marriages permitted', !is.na(code)) %>%  # look up cousin marriage
     mutate(marry_first_cousin = ifelse(name == 'Any first cousins', T, F)) %>% # mark societies that allow first cousin marriage
-      select(society,family,region,marry_first_cousin,in_sccs)
+      select(society,family,region,marry_first_cousin,in_sccs,lon2,lat)
 
 cousin = ea %>% 
   filter(title == 'Descent: major type', !is.na(code)) %>%  # now look up descent
     mutate(patrilineal = ifelse(name == 'Patrilineal', T, F)) %>%  # mark societies with patrilineal descent
       select(society,family,region,patrilineal) %>% 
         merge(cousin) # merge the two sets
+
 ```
 
 The EA codes descent and cousin marriage as two separate variables (EA043 and EA023). We have 1036 / 1291 societies with data for both. 
@@ -60,7 +62,7 @@ We can make a simple cross-tabulation:
 ctable = cousin %>% 
   group_by(patrilineal,marry_first_cousin) %>% 
     summarise(n = n()) %>% 
-      dcast(patrilineal ~ marry_first_cousin)
+      reshape2::dcast(patrilineal ~ marry_first_cousin)
 
 ctable$patrilineal = recode(as.factor(ctable$patrilineal), 'TRUE' = 'patrilineal descent', 'FALSE' = 'other descent')
 names(ctable) = c('','first cousin marriage absent','first cousin marriage present')
@@ -68,6 +70,32 @@ kable(ctable)
 ```
 
 There are more instances of allowing first cousin marriage in patrilineal societies. Or so it looks.
+
+If we map the data, we see what we already saw in the table: more gold (patrilineal) societies [a]llow marriage to first cousins than non-patrilineal ones, even within the 12 largest language families, shown in the figure. Note though that same colours and a/p values seem to cluster together, indicating regional/language family effects.
+
+```{r }
+biggest_family <- cousin %>% 
+  filter(family!='') %>% 
+  group_by(family) %>% 
+  summarise(n = n()) %>% 
+  arrange(-n) %>% 
+  head(12) %>% 
+  pull(family)
+
+cousin_big <- cousin %>% 
+  filter(family %in% biggest_family)
+
+ggplot() + 
+  geom_polygon(data = mapWorld, aes(x=long, y = lat, group = group)) + 
+  geom_label(data = cousin_big, aes(x = lon2, y = lat, colour = patrilineal, label = ifelse(marry_first_cousin, 'a','f'))) +
+  theme(axis.title.x=element_blank(), axis.text.x=element_blank(), axis.ticks=element_blank(), axis.title.y=element_blank(), axis.text.y=element_blank()) + 
+  scale_fill_continuous(guide = guide_legend()) + 
+  theme(legend.position="top") + 
+  guides(colour = guide_legend(override.aes = list(size=11))) +
+  scale_colour_manual(name = '', breaks = c('TRUE', 'FALSE'), labels = c('patrilineal', 'other'), values = c('violetred','gold4')) +
+  labs(caption = 'marriage to first cousin: [a]llowed / [f]orbidden. twelve largest language families.')
+
+```
 
 We fit a binomial regression model estimating whether first cousin marriage is allowed, using whether a society is patrilineal as a predictor. This is pretty simplistic, but works as an illustration. (Note that I'm fitting the regression using a Generalised Additive Model framework (Wood 2016).)
 
@@ -338,7 +366,7 @@ r_squares = cbind(vars,mean_rqs_sccs,mean_rqs_ea) %>% # pull together the values
                         merge(var_matcher) %>% # add titles
                           arrange(-ea) %>% # sick hack: order "title" for r sq from ea!
                             mutate(title = factor(title, title)) %>% 
-                              melt(id = c('var_id','title'), variable.name = 'dataset')# melt for nice 
+                              reshape2::melt(id = c('var_id','title'), variable.name = 'dataset')# reshape2::melt for nice 
 ```
 
 ```{r fig.width = 12, fig.height = 12}

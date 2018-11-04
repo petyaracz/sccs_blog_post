@@ -33,6 +33,10 @@ We can make a simple cross-tabulation:
 
 There are more instances of allowing first cousin marriage in patrilineal societies. Or so it looks.
 
+If we map the data, we see what we already saw in the table: more gold (patrilineal) societies \[a\]llow marriage to first cousins than non-patrilineal ones, even within the 12 largest language families, shown in the figure. Note though that same colours and a/p values seem to cluster together, indicating regional/language family effects.
+
+![](Figs/unnamed-chunk-4-1.png)
+
 We fit a binomial regression model estimating whether first cousin marriage is allowed, using whether a society is patrilineal as a predictor. This is pretty simplistic, but works as an illustration. (Note that I'm fitting the regression using a Generalised Additive Model framework (Wood 2016).)
 
 Fit 1 estimates that the effect of having patrilineal descent is strong on permission on first cousin marriage (b = 0.78, se = 0.2) Maybe this pattern is universal! What happens if we control for **language family** and **region**?
@@ -86,7 +90,7 @@ The problem is that a lot of these categories have a lot of levels and the ratio
 
 I show this for the first ten variables below. EAxxx is the variable name, and code is the numeric coding of the variable levels:
 
-![](Figs/unnamed-chunk-11-1.png)
+![](Figs/unnamed-chunk-12-1.png)
 
 This is actually even more complicated, as not all variables are coded from 1 to n. But the point comes across.
 
@@ -131,6 +135,6 @@ Caveats abound.
 
 Bearing that in mind, here is a plot of r²-s from the two types of models across the 55 categorical variables.
 
-![](Figs/unnamed-chunk-23-1.png)
+![](Figs/unnamed-chunk-24-1.png)
 
 Family and region explain **less** variance in the SCCS than in the EA, as expected. But their effect is not negligible. **This encourages discretion in the use of the SCCS, because human culture is more complicated than it seems.**

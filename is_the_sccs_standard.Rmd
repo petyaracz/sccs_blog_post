@@ -1,7 +1,9 @@
 ---
+title: "Is the SCCS standard?"
+author: "Péter Rácz"
 output:
-  html_document: default
-  pdf_document: default
+  md_document:
+    variant: markdown_github
 ---
 # Is the Standard Cross-Cultural Sample really standard?
 
@@ -25,8 +27,8 @@ library(ggplot2) # for plots
 library(reshape2) # for data wrangling
 library(knitr) # for knitting
 library(itsadug) # for gams
-
-# ea = read.csv('cousin_paper/rehash/ea_tidy.csv') # ea in long format
+try(setwd('~/Work/Bristol/dplace/sccs_blog_post/sccs_blog_post'))
+ea = read.csv('Data/ea_tidy.csv') # ea in long format
 ```
 
 Here is a specific example: In Veiled Sentiments (1986), Lila Abu-Lughod looks at a patrilineal Bedouin group. She argues that marrying your male first cousin is beneficial for women in this group, because it keeps them in the patriline -- they stay with their own family after marriage. 
@@ -274,11 +276,11 @@ for (ii in 1:length(vars)) { # loop through vars, fit function, get mean rsq
 
 mean_rqs2 = unlist(mean_rqs)
 mean_rqs_ea = mean_rqs2
-save(mean_rqs_ea, file = 'mean_rqs_ea.Rda')
+save(mean_rqs_ea, file = 'Data/mean_rqs_ea.Rda')
 ```
 
 ```{r echo=F}
-load('mean_rqs_ea.Rda')
+load('Data/mean_rqs_ea.Rda')
 ```
 
 ## Variation explained by language family and region in the SCCS
@@ -302,12 +304,12 @@ for (ii in 1:length(vars)) {
 }
 
 mean_rqs_sccs = unlist(mean_rqs_sccs)
-save(mean_rqs_sccs, file = 'mean_rqs_sccs.Rda')
+save(mean_rqs_sccs, file = 'Data/mean_rqs_sccs.Rda')
 
 ````
 
 ```{r echo=F}
-load('mean_rqs_sccs.Rda')
+load('Data/mean_rqs_sccs.Rda')
 ```
 
 After all this, we have r² values which express, for each of the 55 surviving categorical variables, the amount of variance explained by a simple language family and region random intercept. We have pairs of values: one value from a model fit on all societies in the EA, and one from the same model fit on the SCCS. 

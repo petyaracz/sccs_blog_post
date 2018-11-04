@@ -73,7 +73,7 @@ There are more instances of allowing first cousin marriage in patrilineal societ
 
 If we map the data, we see what we already saw in the table: more gold (patrilineal) societies [a]llow marriage to first cousins than non-patrilineal ones, even within the 12 largest language families, shown in the figure. Note though that same colours and a/p values seem to cluster together, indicating regional/language family effects.
 
-```{r }
+```{r fig.width=10, fig.height=5}
 biggest_family <- cousin %>% 
   filter(family!='') %>% 
   group_by(family) %>% 

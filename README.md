@@ -1,6 +1,8 @@
 Balanced and unbalanced ethnographic samples: under the bonnet
 ==============================================================
 
+> This is the under-the-bonnet file for the blog post ["Is the Standard Cross-Cultural Sample Really Standard?"](https://excd.org/2018/03/01/stats-corner-is-the-standard-cross-cultural-sample-really-standard/). It walks the reader through the data wrangling, keeping theory to a minimum.
+
 Galton's problem
 ----------------
 
